@@ -1,0 +1,54 @@
+{% extends 'layout.html' %}
+
+{% block body %}
+
+          
+         <main>
+        <section class="container cd-table-container">
+        <h1> Hello, {{current_user.username}} {{current_user.name}}</h1>
+         <p> Here are the list of your registered student patients.</p>
+          <h2 class="cd-title">Upcoming Appointments</h2>
+          <input type="text" class="cd-search table-filter" autofocus data-table="order-table" placeholder="Search for your patient.." />
+        <div class="table-responsive">
+          <table class="cd-table order-table table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Regstration Date</th>
+                <th>Height</th>
+                <th>Weight</th>
+                <th>Marital Status</th>
+                <th>Address</th>
+                <th>Phone Number</th>
+                <th>Email</th>
+                <th>Blood Type</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+          
+            <tbody>
+              {% for reg in std %}
+              <tr>
+                <td>{{ reg.name }}</td>
+                <td>{{ reg.date_registered }}</td>
+                <td>{{ reg.height }}</td>
+                <td>{{ reg.weight }}</td>
+                <td>{{ reg.marital_status }}</td>
+                <td>{{ reg.address }}</td>
+                <td>{{ reg.phonenumber }}</td>
+                <td>{{ reg.email }}</td>
+                <td>{{ reg.blood_type }}</td>
+                <td><a href="" class="btn btn-dark">Take up</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>       
+        </div>
+        </section>
+        <!-- partial -->
+         </main>
+                   
+        <!-- Table Search JS -->
+          <script  src="{{url_for('static',filename='admin-table.js')}}"></script>
+    
+{% endblock %}
