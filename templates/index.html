@@ -1,17 +1,20 @@
 {% extends 'layout.html' %}
 
 {% block body %}
- <div class="container">
-    <p>Hello, {{current_user.school_id}}</p>
-    <h1>Patient registration Form</h1>
-    <form action="" method="POST">
+
+ <div class="container container-form">
+<div class="container">
+    <p class="greet">Hello, {{current_user.school_id}}</p>
+    <h1 class="greet-2">How's your health today?</h1>
+  </div>
+    <form action="" method="POST" class="centered">
       <div class="form-group">
         <label for="name">Name:</label>
-        <input type="text" class="form-control" id="name" name="name" required>
+        <input type="text" class="form-control" id="name" name="name" required {% if current_user.role == 'patient' %} value="{{ current_user.school_id }}" readonly {% endif %}>
       </div>
       <div class="form-group">
         <label for="date_registered">Date Registered:</label>
-        <input type="datetime-local" class="form-control" id="date_registered" name="date_registered" required>
+        <input type="datetime-local" class="form-control" id="date_registered" name="date_registered" required">
       </div>
       <div class="form-group">
         <label for="marital_status">Marital Status:</label>
@@ -32,7 +35,7 @@
       </div>
       <div class="form-group">
         <label for="email">Email:</label>
-        <input type="email" class="form-control" id="email" name="email" required>
+        <input type="email" class="form-control" id="email" name="email"  required {% if current_user.role == 'patient' %} value="{{ current_user.email }}" readonly {% endif %}>
       </div>
       <div class="form-group">
         <label for="height">Height:</label>
@@ -56,7 +59,7 @@
           <option value="O-">O-</option>
         </select>
       </div>
-      <button type="submit" class="btn btn-primary">Register</button>
+      <button type="submit" class="btn btn-primary mt-3">Request checkin</button>
     </form>
   </div>
 

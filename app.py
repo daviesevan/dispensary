@@ -28,8 +28,8 @@ login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(id):
-    return User.query.get(int(id))
-
+    user = User.query.get(int(id))
+    return user
 
 
 class User(db.Model, UserMixin):
@@ -37,9 +37,15 @@ class User(db.Model, UserMixin):
     school_id = db.Column(db.String(20),unique=True, nullable=False)
     email = db.Column(db.String(120),unique=True, nullable=False)
     user_profile = db.Column(db.String(20), nullable=False,default='default.png')
-    user_type = db.Column(db.String(20),nullable=False)
     password = db.Column(db.String(30),nullable=False)
     patient = db.relationship('Std_registration', backref='patient',lazy=True)
+    role = db.Column(db.String(10))
+
+    def __init__(self, school_id,email, password, role):
+        self.school_id = school_id
+        self.email = email
+        self.password = password
+        self.role = role
 
     def __repr__(self):
         return f'User("{self.school_id}","{self.email}","{self.user_profile}")'
@@ -60,71 +66,65 @@ class Std_registration(db.Model):
         def __repr__(self):
             return f'User("{self.name}","{self.email}","{self.date_registered}")'
 
-class Doctor(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    school_id = db.Column(db.String(20), unique=True, nullable=False)
-    phonenumber = db.Column(db.String(15),nullable=False, unique=True) 
-    address = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(20), nullable=False, unique=True)
-    user_role = "doctor"
-
 
 @app.route('/checkin',methods=['POST','GET'])
 @login_required
 def checkin():
-    if request.method == 'POST':
-        name = request.form.get('name')
-        date_registered_str = request.form.get('date_registered')
-        marital_status = request.form.get('marital_status')
-        address = request.form.get('address')
-        phonenumber = request.form.get('phonenumber')
-        email = request.form.get('email')
-        height = request.form.get('height')
-        weight = request.form.get('weight')
-        blood_type = request.form.get('blood_type')
-        date_registered = datetime.strptime(date_registered_str, '%Y-%m-%dT%H:%M')
-        if marital_status not in ms:
-            flash('The Marital status is invalid!', category='error')
-        elif blood_type not in bg:
-            flash('The Blood group is invalid!', category='error')
-        elif len(name) < 5:
-            flash('The username is too short!', category='error')
-        else:
-            new_reg = Std_registration(name=name,date_registered=date_registered,
-                                       marital_status=marital_status,
-                                       address=address,phonenumber=phonenumber,
-                                       email=email,height=height,
-                                       weight=weight,blood_type=blood_type,patient_id = current_user.id)
-            db.session.add(new_reg)
-            db.session.commit()
-    return render_template('index.html',user=current_user, ms=ms)
+    if current_user.role == 'patient':
+        
+        if request.method == 'POST':
+            name = request.form.get('name')
+            date_registered_str = request.form.get('date_registered')
+            marital_status = request.form.get('marital_status')
+            address = request.form.get('address')
+            phonenumber = request.form.get('phonenumber')
+            email = request.form.get('email')
+            height = request.form.get('height')
+            weight = request.form.get('weight')
+            blood_type = request.form.get('blood_type')
+            date_registered = datetime.strptime(date_registered_str, '%Y-%m-%dT%H:%M')
+            
+            if marital_status not in ms:
+                flash('The Marital status is invalid!', category='error')
+            elif blood_type not in bg:
+                flash('The Blood group is invalid!', category='error')
+            elif len(name) < 5:
+                flash('The username is too short!', category='error')
+            else:
+                new_reg = Std_registration(name=name,date_registered=date_registered,
+                                        marital_status=marital_status,
+                                        address=address,phonenumber=phonenumber,
+                                        email=email,height=height,
+                                        weight=weight,blood_type=blood_type,patient_id = current_user.id)
+                db.session.add(new_reg)
+                db.session.commit()
+        return render_template('index.html',user=current_user, ms=ms)
 
 @app.route('/login',methods=['POST','GET'])
 def login():
     if request.method == 'POST':
         school_id = request.form.get('school_id')
         password = request.form.get('password')
-        usertype = request.form.get('usertype')
         user = User.query.filter_by(school_id=school_id).first()
         if user:
-            if check_password_hash(user.password,password):               
-                if usertype == 'patient':
-                    login_user(user,remember=True)
-                    role = Std_registration.query.filter_by(user_role=usertype)
-                    if role:
-                        return redirect(url_for('checkin'))
-                else:
-                    if usertype == 'doctor':
-                        role = Std_registration.query.filter_by(user_role=usertype)
-                        if role:
-                            return redirect(url_for('admin'))#Staff dashboard
-                    
+            if check_password_hash(user.password,password):                
+                login_user(user,remember=True)
+                if current_user.role == 'doctor':
+                    flash(f'Welcome back {current_user.school_id}!', category='success')
+                    return redirect(url_for('admin'))
+                flash(f'Welcome back {current_user.school_id}', category='error')
+                return redirect(url_for('home'))                                                 
             else:
                 flash('Wrong username or password!', category='error')
-        flash('The Username doesn\'t exist!', category='error')
+        flash('The School id doesn\'t exist! Please try again', category='error')
     return render_template('login.html',user=current_user)
     
-
+@app.route('/')
+@login_required
+def home():
+    if current_user.role == 'patient':
+        return render_template('home.html')
+    return redirect(url_for('login'))
 
 @app.route('/logout')
 @login_required
@@ -137,27 +137,62 @@ def signup():
     if request.method == 'POST':
         email = request.form.get('email')
         school_id = request.form.get('school_id')
-        password1 = request.form.get('password1')
-        usertype = request.form.get('usertype')
+        password = request.form.get('password')
+        role = request.form.get('role')
         user = User.query.filter_by(email=email).first()
         s_id = User.query.filter_by(school_id=school_id).first()
         if user:
             flash('Account with this email already exists!', category='error')
         if s_id:
             flash('Account with this Username already exists!', category='error')
-        if not school_id or not email or not password1:
+        if not school_id or not email or not password:
             flash('Sorry we couldn\'t sign you in!', category='error')
-        else:
-            new_user = User(email=email,school_id=school_id,password=generate_password_hash(password1,method = 'sha256'),user_type=usertype)
-            db.session.add(new_user)
-            db.session.commit()
-            login_user(new_user,remember=True)
-
-            return redirect(url_for('login'))
+        new_user = User(email=email,
+                            school_id=school_id,
+                            password=generate_password_hash(password,method = 'sha256'),
+                            role=role)
+        db.session.add(new_user)
+        db.session.commit()
+        login_user(new_user,remember=True)
+        return redirect(url_for('login'))
+        
     return render_template("signup.html",user=current_user)
 
 @app.route('/admin')
 @login_required
 def admin():
-    std=Std_registration.query.all()
-    return render_template('staff.html',std=std)
+    if current_user.role == 'doctor':
+        std=Std_registration.query.all()
+        return render_template('staff.html',std=std,user=current_user)
+    else:
+        return redirect(url_for('login'))
+
+# @app.route('/profile/<school_id>')
+# @login_required
+# def profile(school_id):
+#     school_id == current_user.school_id
+#     return render_template('profile.html',user=current_user, school_id=school_id)
+
+@app.route('/account', methods=['GET','POST'])
+@login_required
+def account():
+    if request.method == 'POST':
+        school_id = request.form.get('school_id')
+        email = request.form.get('email')
+        if school_id == current_user.school_id:
+            flash('School ID cannot be changed.',category="warning")
+        elif email != current_user.email:
+            check_mail =User.query.filter_by(email=current_user.email)
+            for i in range (len(check_mail)):
+                print ("Email Already Exists!")
+                flash('Email Already Exists! Please use a different Email address.',category='warning')
+                break;
+            db.session.commit()
+            flash('Account has been updated succesfully',category='success')
+    elif request.method == 'GET':
+        school_id = current_user.email
+        email = current_user.email
+    return render_template('account.html',user=current_user)
+
+if __name__ == '__main__':
+    app.run(debug=True)

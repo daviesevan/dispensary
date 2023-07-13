@@ -25,7 +25,7 @@
     height: 100vh;
   }
   .centered {
-    max-width: 400px; /* Adjust the maximum width of the form according to your requirements */
+    max-width: 700px; /* Adjust the maximum width of the form according to your requirements */
     width: 100%;
     padding: 10px;
     background-color: #f5f5f5;
@@ -40,6 +40,19 @@
   }
   .fa-sharp{
     font-size: 14px;
+  }
+  .clr{
+    font-size: 16px;
+    font-weight: 600;
+    color: #b8b5b5;
+    margin-top: 7px;
+  }
+  .greet{
+    font-size: 20px;
+  }
+  .greet-2{
+    font-size: 40px;
+    font-weight: 700;
   }
 </style>
 <body>
@@ -57,9 +70,16 @@
         <li class="nav-item">
           <a class="nav-link active" aria-current="page" href="/">Home</a>
         </li>
+        {% if current_user.role == 'patient' %}
         <li class="nav-item">
           <a class="nav-link" href="{{url_for('checkin')}}">Check In</a>
         </li>
+        {% else %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{url_for('admin')}}">Admin</a>
+        </li>
+        {% endif %}
+        <li class="nav-item"><p class="pd-5 clr">Time: <span id="current-time"></span></p></li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             Account
@@ -67,6 +87,14 @@
           <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
             {% if current_user.is_authenticated %}
             <li><a class="dropdown-item" href="{{url_for('logout')}}">Log Out</a></li>
+            <!-- <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item" href="{{url_for('profile')}}">Profile</a></li> -->
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item" href="{{url_for('account')}}">Update account</a></li>
             {% else %}
             <li><a class="dropdown-item" href="{{url_for('login')}}">Sign In</a></li>
             <li>
@@ -115,5 +143,27 @@
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script>
+<script>
+  function displayCurrentTime() {
+      var currentTime = new Date();
+      var hours = currentTime.getHours();
+      var minutes = currentTime.getMinutes();
+      var seconds = currentTime.getSeconds();
+
+      // Add leading zeros if necessary
+      hours = (hours < 10 ? "0" : "") + hours;
+      minutes = (minutes < 10 ? "0" : "") + minutes;
+      seconds = (seconds < 10 ? "0" : "") + seconds;
+
+      var formattedTime = hours + ":" + minutes + ":" + seconds;
+
+      document.getElementById("current-time").textContent = formattedTime;
+
+      // Update the time every second
+      setTimeout(displayCurrentTime, 1000);
+  }
+
+  window.onload = displayCurrentTime;
+</script>
 </body>
 </html>
