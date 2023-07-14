@@ -96,8 +96,13 @@ def checkin():
                                         address=address,phonenumber=phonenumber,
                                         email=email,height=height,
                                         weight=weight,blood_type=blood_type,patient_id = current_user.id)
-                db.session.add(new_reg)
-                db.session.commit()
+                try:
+                    db.session.add(new_reg)
+                    db.session.commit()
+                    flash('Appointment booked successfully',category='success')
+                    return redirect(url_for('home'))
+                except:
+                    flash('Looks like you have a pending appointment',category='error')
         return render_template('index.html',user=current_user, ms=ms)
 
 @app.route('/login',methods=['POST','GET'])
@@ -112,7 +117,7 @@ def login():
                 if current_user.role == 'doctor':
                     flash(f'Welcome back {current_user.school_id}!', category='success')
                     return redirect(url_for('admin'))
-                flash(f'Welcome back {current_user.school_id}', category='error')
+                flash(f'Welcome back {current_user.school_id}', category='success')
                 return redirect(url_for('home'))                                                 
             else:
                 flash('Wrong username or password!', category='error')
@@ -167,6 +172,19 @@ def admin():
     else:
         return redirect(url_for('login'))
 
+@app.route('/takeup/<int:patient_id>')
+@login_required
+def takeup(patient_id):
+    if current_user.role == 'doctor':
+        takeup = Std_registration.query.get_or_404(patient_id)
+        try:
+            db.session.delete(takeup)
+            db.session.commit()
+            return redirect(url_for('admin'))
+        except:
+            flash('There was a problem deleting a task',category='error')
+    return render_template('takeup.html') 
+
 
 @app.route('/account', methods=['GET','POST'])
 @login_required
@@ -188,6 +206,12 @@ def account():
         school_id = current_user.email
         email = current_user.email
     return render_template('account.html',user=current_user)
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
 
 if __name__ == '__main__':
     app.run(debug=True)
