@@ -167,11 +167,6 @@ def admin():
     else:
         return redirect(url_for('login'))
 
-# @app.route('/profile/<school_id>')
-# @login_required
-# def profile(school_id):
-#     school_id == current_user.school_id
-#     return render_template('profile.html',user=current_user, school_id=school_id)
 
 @app.route('/account', methods=['GET','POST'])
 @login_required
