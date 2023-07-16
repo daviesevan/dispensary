@@ -3,16 +3,36 @@ from flask import Flask,render_template,url_for,redirect,request,flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin,login_user,LoginManager,login_required,logout_user,current_user
 from sqlalchemy.sql import func
+from flask_mail import Mail
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
 import os
+from itsdangerous.serializer import Serializer
+import secrets
 
+load_dotenv()
 DB_NAME = "database.db"
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_NAME}'
-app.config['SECRET_KEY'] = '9d1e302104a9b91c669a998d2df41d835109e86feebe2fd986d028c7b343'
-db = SQLAlchemy(app)
+# Access the environment variables
+mail_username = os.getenv('MAIL_USERNAME')
+mail_password = os.getenv('MAIL_PASSWORD')
+secret_key = os.getenv('SECRET_KEY')
 
+app.config['SECRET_KEY'] = secret_key
+
+# Initialize Flask-Mail
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = mail_username
+app.config['MAIL_PASSWORD'] = mail_password
+app.config['MAIL_MAX_EMAILS '] = None
+app.config['MAIL_SUPPRESS_SEND '] = app.testing
+
+db = SQLAlchemy(app)
+mail = Mail(app)
 # Set up the application context
 app.app_context().push()
 
@@ -28,7 +48,7 @@ login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(id):
-    user = User.query.get(int(id))
+    user = User.query.get(int(id) if id is not None else None)
     return user
 
 
@@ -65,6 +85,12 @@ class Std_registration(db.Model):
         user_role = 'patient'
         def __repr__(self):
             return f'User("{self.name}","{self.email}","{self.date_registered}")'
+        
+
+# Initialize the URL serializer for password reset tokens using secrets
+secret = secrets.token_urlsafe(30)
+print(secret)
+serializer = Serializer(secret)
 
 
 @app.route('/checkin',methods=['POST','GET'])
@@ -192,26 +218,86 @@ def account():
     if request.method == 'POST':
         school_id = request.form.get('school_id')
         email = request.form.get('email')
-        if school_id == current_user.school_id:
-            flash('School ID cannot be changed.',category="warning")
-        elif email != current_user.email:
-            check_mail =User.query.filter_by(email=current_user.email)
-            for i in range (len(check_mail)):
-                print ("Email Already Exists!")
-                flash('Email Already Exists! Please use a different Email address.',category='warning')
-                break;
-            db.session.commit()
-            flash('Account has been updated succesfully',category='success')
-    elif request.method == 'GET':
-        school_id = current_user.email
-        email = current_user.email
-    return render_template('account.html',user=current_user)
 
+        if school_id == current_user.school_id:
+            flash('School ID cannot be changed.', category='warning')
+        elif email != current_user.email:
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                flash('If the email doesn\'t exist then It has been updated successfully.', category='warning')
+            else:
+                current_user.email = email
+                current_user.school_id = school_id
+                db.session.commit()
+                flash('Account has been updated successfully.', category='success')
+    return render_template('account.html', user=current_user)
+    
 
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('404.html'), 404
 
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+@login_required
+def forgot_password():
+    if request.method == 'POST':
+        user = User.query.filter_by(email=current_user.email).first()
+        if user:
+            # Generate the password reset token
+            token = serializer.dumps(user.email, salt='reset-password')
+            
+            # Create the password reset URL
+            reset_url = url_for('reset_password', token=token, _external=True)
+            
+            # Send the password reset email
+            mail.send_message(
+                subject='Reset Your Password',
+                sender='noreply@dispensary.spu.ac.ke',
+                recipients=[user.email],
+                body=f"Please click the link below to reset your password:\n{reset_url}"
+            )
+            
+            flash('If the Email exists in our database then Password reset instructions has been sent successfully.', category='success')
+            return redirect(url_for('login'))
+        else:
+            flash('Email address not found.')
+    return render_template('request-pass-change.html')
+
+
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        email = serializer.loads(token, salt='reset-password', max_age=3600)
+    except:
+        flash('Invalid or expired token. Please request a new password reset.',category='error')
+        return redirect(url_for('forgot_password'))
+    
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        flash('Email address not found.')
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        # Change the user's password
+        user.password = generate_password_hash(password)
+        db.session.commit()
+        
+        # Send confirmation email
+        mail.send_message(
+            subject='Password Reset Successful',
+            sender='noreply@dispensary.spu.ac.ke',
+            recipients=[user.email],
+            body='Your password has been successfully reset.'
+        )
+        
+        # Flash a success message and redirect to the login page
+        flash('Your password has been reset successfully.', category='success')
+        return redirect(url_for('login'))
+    
+    return render_template('request-pass-change.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
