@@ -54,6 +54,7 @@ def load_user(id):
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(30), nullable=False)
     school_id = db.Column(db.String(20),unique=True, nullable=False)
     email = db.Column(db.String(120),unique=True, nullable=False)
     user_profile = db.Column(db.String(20), nullable=False,default='default.png')
@@ -61,8 +62,9 @@ class User(db.Model, UserMixin):
     patient = db.relationship('Std_registration', backref='patient',lazy=True)
     role = db.Column(db.String(10))
 
-    def __init__(self, school_id,email, password, role):
+    def __init__(self, school_id,username,email, password, role):
         self.school_id = school_id
+        self.username = username
         self.email = email
         self.password = password
         self.role = role
@@ -141,9 +143,9 @@ def login():
             if check_password_hash(user.password,password):                
                 login_user(user,remember=True)
                 if current_user.role == 'doctor':
-                    flash(f'Welcome back {current_user.school_id}!', category='success')
+                    flash(f'Welcome back {current_user.username}!', category='success')
                     return redirect(url_for('admin'))
-                flash(f'Welcome back {current_user.school_id}', category='success')
+                flash(f'Welcome back {current_user.username}!', category='success')
                 return redirect(url_for('home'))                                                 
             else:
                 flash('Wrong username or password!', category='error')
@@ -154,9 +156,22 @@ def login():
 @login_required
 def home():
     if current_user.role == 'patient':
-        return render_template('home.html')
+        user = User.query.get(current_user.id)
+        appointments = user.patient
+        return render_template('home.html', appointments=appointments)
     return redirect(url_for('login'))
 
+
+@app.route('/delete/<int:id>')
+def delete(id):
+    appointment_to_delete = Std_registration.query.get_or_404(id)
+    try:
+        db.session.delete(appointment_to_delete)
+        db.session.commit()
+        return redirect('/')
+    except:
+        flash('There was a problem deleting a task',category='error')
+    
 @app.route('/logout')
 @login_required
 def logout():
@@ -167,6 +182,7 @@ def logout():
 def signup():
     if request.method == 'POST':
         email = request.form.get('email')
+        username = request.form.get('username')
         school_id = request.form.get('school_id')
         password = request.form.get('password')
         role = request.form.get('role')
@@ -179,9 +195,10 @@ def signup():
         if not school_id or not email or not password:
             flash('Sorry we couldn\'t sign you in!', category='error')
         new_user = User(email=email,
-                            school_id=school_id,
-                            password=generate_password_hash(password,method = 'sha256'),
-                            role=role)
+                        username=username,
+                        school_id=school_id,
+                        password=generate_password_hash(password,method = 'sha256'),
+                        role=role)
         db.session.add(new_user)
         db.session.commit()
         login_user(new_user,remember=True)
@@ -193,16 +210,17 @@ def signup():
 @login_required
 def admin():
     if current_user.role == 'doctor':
-        std=Std_registration.query.all()
+        std=Std_registration.query.order_by(Std_registration.date_registered).all()
         return render_template('staff.html',std=std,user=current_user)
     else:
+        logout_user()
         return redirect(url_for('login'))
 
-@app.route('/takeup/<int:patient_id>')
+@app.route('/takeup/<int:id>')
 @login_required
-def takeup(patient_id):
+def takeup(id):
     if current_user.role == 'doctor':
-        takeup = Std_registration.query.get_or_404(patient_id)
+        takeup = Std_registration.query.get_or_404(id)
         try:
             db.session.delete(takeup)
             db.session.commit()
@@ -220,7 +238,7 @@ def account():
         email = request.form.get('email')
 
         if school_id == current_user.school_id:
-            flash('School ID cannot be changed.', category='warning')
+            flash('School ID cannot be changed.', category='error')
         elif email != current_user.email:
             existing_user = User.query.filter_by(email=email).first()
             if existing_user:
