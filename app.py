@@ -257,10 +257,13 @@ def page_not_found(e):
 
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
-@login_required
 def forgot_password():
+    email_message = None  # Initialize email_message variable
+    
     if request.method == 'POST':
-        user = User.query.filter_by(email=current_user.email).first()
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        
         if user:
             # Generate the password reset token
             token = serializer.dumps(user.email, salt='reset-password')
@@ -269,18 +272,26 @@ def forgot_password():
             reset_url = url_for('reset_password', token=token, _external=True)
             
             # Send the password reset email
-            mail.send_message(
-                subject='Reset Your Password',
-                sender='noreply@dispensary.spu.ac.ke',
-                recipients=[user.email],
-                body=f"Please click the link below to reset your password:\n{reset_url}"
-            )
+            email_subject = 'Reset Your Password'
+            email_sender = 'noreply@spudispensary.spu.ac.ke'
+            email_recipients = user.email
+            email_body = f"Please click the link below to reset your password: <a class='btn\ btn-primary' href='{reset_url}'>Reset URL</a>"
             
-            flash('If the Email exists in our database then Password reset instructions has been sent successfully.', category='success')
-            return redirect(url_for('login'))
+            email_message = {
+                'subject': email_subject,
+                'sender': email_sender,
+                'recipients': email_recipients,
+                'body': email_body
+            }
+            
+            flash('If the email exists in our database, then password reset instructions have been sent successfully.', category='success')
+        
         else:
-            flash('Email address not found.')
-    return render_template('request-pass-change.html')
+            flash('Email doesn\'t exist in our database. You can create an account with us',category='error')
+    
+    return render_template('request-pass-change.html', email_message=email_message)
+
+
 
 
 
@@ -289,7 +300,7 @@ def reset_password(token):
     try:
         email = serializer.loads(token, salt='reset-password', max_age=3600)
     except:
-        flash('Invalid or expired token. Please request a new password reset.',category='error')
+        flash('Invalid or expired token. Please request a new password reset.', category='error')
         return redirect(url_for('forgot_password'))
     
     user = User.query.filter_by(email=email).first()
@@ -304,18 +315,22 @@ def reset_password(token):
         db.session.commit()
         
         # Send confirmation email
-        mail.send_message(
-            subject='Password Reset Successful',
-            sender='noreply@dispensary.spu.ac.ke',
-            recipients=[user.email],
-            body='Your password has been successfully reset.'
-        )
+        email_subject = 'Password Reset Confirmation'
+        email_sender = 'noreply@spudispensary.spu.ac.ke'
+        email_recipients = user.email
+        email_body = "Your password has been reset successfully."
         
-        # Flash a success message and redirect to the login page
+        email_message = {
+                'subject': email_subject,
+                'sender': email_sender,
+                'recipients': email_recipients,
+                'body': email_body
+            }
         flash('Your password has been reset successfully.', category='success')
-        return redirect(url_for('login'))
+        return render_template('change-password.html',email_message=email_message)
     
-    return render_template('request-pass-change.html')
+    return render_template('change-password.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
