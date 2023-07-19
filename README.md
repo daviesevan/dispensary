@@ -1,4 +1,4 @@
-# dispensary
+# Dispensary
 Sure! Here's an example README file that you can include in your repository to provide information about your Flask application:
 
 ---
