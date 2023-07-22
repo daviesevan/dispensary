@@ -21,13 +21,13 @@
         </tr>
         {%for appointment in appointments%}
         <tr>
-            <td>{{ appointment.name }}</td>
+            <td>{{ current_user.username }}</td>
             <td>{{ appointment.height }}</td>
             <td>{{ appointment.weight }}</td>
             <td>{{ appointment.marital_status }}</td>
             <td>{{ appointment.address }}</td>
             <td>{{ appointment.phonenumber }}</td>
-            <td>{{ appointment.email }}</td>
+            <td>{{ current_user.email }}</td>
             <td>{{ appointment.blood_type }}</td>
             <td>
                 <div class="appointment-actions">

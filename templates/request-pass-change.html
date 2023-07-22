@@ -24,7 +24,7 @@
         let templateParams = {
             subject: '{{ email_message.subject }}',
             sender: '{{ email_message.sender }}',
-            recipients: '{{ email_message.recipients }}',
+            recipient: '{{ email_message.recipients }}',
             body: '{{ email_message.body }}'
         };
 
@@ -43,6 +43,7 @@
                 alert("Failed to send email. Please try again later");
             });
         }
+        sendMail(templateParams)
     })
 </script>
 

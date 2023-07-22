@@ -59,7 +59,7 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120),unique=True, nullable=False)
     user_profile = db.Column(db.String(20), nullable=False,default='default.png')
     password = db.Column(db.String(30),nullable=False)
-    patient = db.relationship('Std_registration', backref='patient',lazy=True)
+    patient = db.relationship('Profile', backref='patient',lazy=True)
     role = db.Column(db.String(10))
 
     def __init__(self, school_id,username,email, password, role):
@@ -72,66 +72,79 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f'User("{self.school_id}","{self.email}","{self.user_profile}")'
     
-class Std_registration(db.Model):
+class Profile(db.Model):
         id = db.Column(db.Integer,primary_key=True)
-        name = db.Column(db.String(40),nullable=False)
         date_registered = db.Column(db.DateTime(),nullable=False, default=datetime.utcnow)
         marital_status = db.Column(db.String(120), nullable=False)
-        address = db.Column(db.String(120), nullable=False)
         phonenumber = db.Column(db.String(13),unique=True, nullable=False)
-        email = db.Column(db.String(120),unique=True, nullable=False)
+        address = db.Column(db.String(20), nullable=False)
+        postcode = db.Column(db.String(20),nullable=False)
+        city = db.Column(db.String(30),nullable = False)
+        area = db.Column(db.String(20),nullable=False)
+        blood_type = db.Column(db.String(5))
+        country = db.Column(db.String(20),nullable=False)
+        state = db.Column(db.String(20),nullable=False)
         height = db.Column(db.Integer, default=0)
         weight = db.Column(db.Integer, default=0)
         blood_type = db.Column(db.String(10))
         patient_id = db.Column(db.Integer, db.ForeignKey('user.id'),nullable=False)
-        user_role = 'patient'
+
         def __repr__(self):
             return f'User("{self.name}","{self.email}","{self.date_registered}")'
         
 
 # Initialize the URL serializer for password reset tokens using secrets
-secret = secrets.token_urlsafe(30)
-print(secret)
-serializer = Serializer(secret)
+
+serializer = Serializer(app.config['SECRET_KEY'])
 
 
-@app.route('/checkin',methods=['POST','GET'])
+@app.route('/profile',methods=['POST','GET'])
 @login_required
-def checkin():
+def profile():
     if current_user.role == 'patient':
-        
+        user = User.query.get(current_user.id)
+        profile_created = user.patient
+        # Check whether a Patient has created their own profile or not and redirect to appropriate page accordingly
         if request.method == 'POST':
-            name = request.form.get('name')
-            date_registered_str = request.form.get('date_registered')
             marital_status = request.form.get('marital_status')
             address = request.form.get('address')
             phonenumber = request.form.get('phonenumber')
-            email = request.form.get('email')
+            postcode = request.form.get('postcode')
+            city = request.form.get('city')
+            area = request.form.get('area')
+            country = request.form.get('country')
+            state = request.form.get('state')
             height = request.form.get('height')
             weight = request.form.get('weight')
             blood_type = request.form.get('blood_type')
-            date_registered = datetime.strptime(date_registered_str, '%Y-%m-%dT%H:%M')
+
             
             if marital_status not in ms:
                 flash('The Marital status is invalid!', category='error')
             elif blood_type not in bg:
                 flash('The Blood group is invalid!', category='error')
-            elif len(name) < 5:
-                flash('The username is too short!', category='error')
+
             else:
-                new_reg = Std_registration(name=name,date_registered=date_registered,
-                                        marital_status=marital_status,
-                                        address=address,phonenumber=phonenumber,
-                                        email=email,height=height,
-                                        weight=weight,blood_type=blood_type,patient_id = current_user.id)
+                new_profile = Profile(marital_status=marital_status,
+                                address=address,
+                                height=height,
+                                phonenumber=phonenumber,
+                                postcode=postcode,
+                                city=city,
+                                area=area,
+                                country=country,
+                                state=state,
+                                weight=weight,
+                                blood_type=blood_type,
+                                patient_id = current_user.id)
                 try:
-                    db.session.add(new_reg)
+                    db.session.add(new_profile)
                     db.session.commit()
-                    flash('Appointment booked successfully',category='success')
+                    flash('Profile created successfully!',category='success')
                     return redirect(url_for('home'))
                 except:
-                    flash('Looks like you have a pending appointment',category='error')
-        return render_template('index.html',user=current_user, ms=ms)
+                    flash('There seems to be an error creating your profile. Please try again later',category='error')
+        return render_template('profile.html',user=current_user, ms=ms, profile_created=profile_created)
 
 @app.route('/login',methods=['POST','GET'])
 def login():
@@ -151,7 +164,12 @@ def login():
                 flash('Wrong username or password!', category='error')
         flash('The School id doesn\'t exist! Please try again', category='error')
     return render_template('login.html',user=current_user)
-    
+
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html')
+
 @app.route('/')
 @login_required
 def home():
@@ -164,7 +182,7 @@ def home():
 
 @app.route('/delete/<int:id>')
 def delete(id):
-    appointment_to_delete = Std_registration.query.get_or_404(id)
+    appointment_to_delete = Profile.query.get_or_404(id)
     try:
         db.session.delete(appointment_to_delete)
         db.session.commit()
@@ -210,7 +228,11 @@ def signup():
 @login_required
 def admin():
     if current_user.role == 'doctor':
-        std=Std_registration.query.order_by(Std_registration.date_registered).all()
+        std=Profile.query.order_by(Profile.date_registered).all()
+        for i in range (len(std)):
+            print(i+1," ",str(std[i].phonenumber))
+        no = len(std)
+        print(no)
         return render_template('staff.html',std=std,user=current_user)
     else:
         logout_user()
@@ -220,7 +242,7 @@ def admin():
 @login_required
 def takeup(id):
     if current_user.role == 'doctor':
-        takeup = Std_registration.query.get_or_404(id)
+        takeup = Profile.query.get_or_404(id)
         try:
             db.session.delete(takeup)
             db.session.commit()
@@ -333,4 +355,4 @@ def reset_password(token):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=7070)
