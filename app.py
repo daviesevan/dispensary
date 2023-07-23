@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import os
 from itsdangerous.serializer import Serializer
-import secrets
+from sqlalchemy.orm import relationship
 
 load_dotenv()
 DB_NAME = "database.db"
@@ -73,25 +73,26 @@ class User(db.Model, UserMixin):
         return f'User("{self.school_id}","{self.email}","{self.user_profile}")'
     
 class Profile(db.Model):
-        id = db.Column(db.Integer,primary_key=True)
-        date_registered = db.Column(db.DateTime(),nullable=False, default=datetime.utcnow)
-        marital_status = db.Column(db.String(120), nullable=False)
-        phonenumber = db.Column(db.String(13),unique=True, nullable=False)
-        address = db.Column(db.String(20), nullable=False)
-        postcode = db.Column(db.String(20),nullable=False)
-        city = db.Column(db.String(30),nullable = False)
-        area = db.Column(db.String(20),nullable=False)
-        blood_type = db.Column(db.String(5))
-        country = db.Column(db.String(20),nullable=False)
-        state = db.Column(db.String(20),nullable=False)
-        height = db.Column(db.Integer, default=0)
-        weight = db.Column(db.Integer, default=0)
-        blood_type = db.Column(db.String(10))
-        patient_id = db.Column(db.Integer, db.ForeignKey('user.id'),nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    date_registered = db.Column(db.DateTime(), nullable=False, default=datetime.utcnow)
+    marital_status = db.Column(db.String(120), nullable=False)
+    phonenumber = db.Column(db.String(13), unique=True, nullable=False)
+    address = db.Column(db.String(20), nullable=False)
+    postcode = db.Column(db.String(20), nullable=False)
+    city = db.Column(db.String(30), nullable=False)
+    area = db.Column(db.String(20), nullable=False)
+    blood_type = db.Column(db.String(5))
+    country = db.Column(db.String(20), nullable=False)
+    state = db.Column(db.String(20), nullable=False)
+    height = db.Column(db.Integer, default=0)
+    weight = db.Column(db.Integer, default=0)
+    blood_type = db.Column(db.String(10))
+    user = relationship("User", backref="profile", uselist=False)
+    appointment_status = db.Column(db.String(15), default='pending')  # Add appointment status field
+    patient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-        def __repr__(self):
-            return f'User("{self.name}","{self.email}","{self.date_registered}")'
-        
+    def __repr__(self):
+        return f'Profile("{self.name}", "{self.email}", "{self.date_registered}")'        
 
 # Initialize the URL serializer for password reset tokens using secrets
 
@@ -140,10 +141,10 @@ def profile():
                 try:
                     db.session.add(new_profile)
                     db.session.commit()
-                    flash('Profile created successfully!',category='success')
+                    flash('Appointment was created successfully!',category='success')
                     return redirect(url_for('home'))
                 except:
-                    flash('There seems to be an error creating your profile. Please try again later',category='error')
+                    flash('There seems to be an error booking your appointment. Please try again later',category='error')
         return render_template('profile.html',user=current_user, ms=ms, profile_created=profile_created)
 
 @app.route('/login',methods=['POST','GET'])
@@ -176,6 +177,36 @@ def home():
     if current_user.role == 'patient':
         user = User.query.get(current_user.id)
         appointments = user.patient
+        return render_template('home.html', appointments=appointments)
+    return redirect(url_for('login'))
+
+from datetime import datetime
+
+@app.route('/book_appointment', methods=['GET', 'POST'])
+@login_required
+def book_appointment():
+    if current_user.role == 'patient':
+        user = User.query.get(current_user.id)
+        appointments = user.patient
+
+        if appointments and request.method == 'POST':
+            appointment_id = request.form.get('appointment_id')
+            selected_appointment = Profile.query.get(appointment_id)
+
+            # Check if the selected appointment status is 'approved'
+            if selected_appointment.appointment_status == 'approved':
+                # Update the date_registered field with the current date and time
+                selected_appointment.date_registered = datetime.utcnow()
+
+                # Update the status to 'booked'
+                selected_appointment.appointment_status = 'booked'
+
+                try:
+                    db.session.commit()
+                    flash('Appointment booked successfully!', category='success')
+                except:
+                    flash('There was a problem booking the appointment', category='error')
+
         return render_template('home.html', appointments=appointments)
     return redirect(url_for('login'))
 
@@ -228,28 +259,56 @@ def signup():
 @login_required
 def admin():
     if current_user.role == 'doctor':
-        std=Profile.query.order_by(Profile.date_registered).all()
-        for i in range (len(std)):
-            print(i+1," ",str(std[i].phonenumber))
-        no = len(std)
-        print(no)
-        return render_template('staff.html',std=std,user=current_user)
+        appointments = Profile.query.order_by(Profile.date_registered).all()
+        # Calculate the number of appointments
+        num_appointments = len(appointments)
+         # Calculate the count of users with each blood group
+        blood_group_counts = {}
+        for appointment in appointments:
+            blood_group = appointment.blood_type
+            if blood_group in blood_group_counts:
+                blood_group_counts[blood_group] += 1
+            else:
+                blood_group_counts[blood_group] = 1
+
+        return render_template('staff.html', appointments=appointments,
+                               num_appointments=num_appointments,
+                               blood_group_counts=blood_group_counts,
+                               user=current_user)
     else:
         logout_user()
         return redirect(url_for('login'))
+
+
 
 @app.route('/takeup/<int:id>')
 @login_required
 def takeup(id):
     if current_user.role == 'doctor':
-        takeup = Profile.query.get_or_404(id)
-        try:
-            db.session.delete(takeup)
-            db.session.commit()
-            return redirect(url_for('admin'))
-        except:
-            flash('There was a problem deleting a task',category='error')
-    return render_template('takeup.html') 
+        # Get the appointment details from the Profile model
+        appointment = Profile.query.get_or_404(id)
+
+        # Check if the appointment is already approved
+        if appointment.appointment_status == 'pending':
+            # Update the appointment status to approved (or something similar)
+            appointment.appointment_status = 'approved'
+            
+            try:
+                # Save the updated appointment status to the database
+                db.session.commit()
+
+                # Send email notification to the patient
+                # send_email_to_patient(appointment.patient_email, "Appointment Approved", "Your appointment has been approved.")
+
+                flash('Appointment approved successfully!', category='success')
+            except:
+                flash('There was a problem approving the appointment', category='error')
+        else:
+            flash('Appointment has already been approved', category='info')
+
+        return redirect(url_for('admin'))
+    else:
+        return render_template('takeup.html')
 
 
 @app.route('/account', methods=['GET','POST'])
@@ -297,7 +356,7 @@ def forgot_password():
             email_subject = 'Reset Your Password'
             email_sender = 'noreply@spudispensary.spu.ac.ke'
             email_recipients = user.email
-            email_body = f"Please click the link below to reset your password: <a class='btn\ btn-primary' href='{reset_url}'>Reset URL</a>"
+            email_body = f"Please click the link below to reset your password: <a class='btn btn-primary' href='{reset_url}'>Reset URL</a>"
             
             email_message = {
                 'subject': email_subject,
@@ -327,7 +386,7 @@ def reset_password(token):
     
     user = User.query.filter_by(email=email).first()
     if not user:
-        flash('Email address not found.')
+        flash('Email address not found.',category='error')
         return redirect(url_for('forgot_password'))
     
     if request.method == 'POST':

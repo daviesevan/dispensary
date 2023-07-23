@@ -6,6 +6,8 @@
     <h1>Here is Appointments</h1>
     {% if appointments|length < 1%}
     <h3>There are no appointments. Create on below</h3>
+    <h2>Book an Appointment</h2>
+    <a href="{{url_for('profile')}}" class="btn btn-success">Make your first appointment</a>
     {% else%}
     <table class="cd-table order-table table">
         <tr>
