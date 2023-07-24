@@ -74,7 +74,7 @@ class User(db.Model, UserMixin):
     
 class Profile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    date_registered = db.Column(db.DateTime(), nullable=False, default=datetime.utcnow)
+    date_registered = db.Column(db.DateTime(), nullable=False, default=datetime.now)
     marital_status = db.Column(db.String(120), nullable=False)
     phonenumber = db.Column(db.String(13), unique=True, nullable=False)
     address = db.Column(db.String(20), nullable=False)
@@ -88,7 +88,7 @@ class Profile(db.Model):
     weight = db.Column(db.Integer, default=0)
     blood_type = db.Column(db.String(10))
     user = relationship("User", backref="profile", uselist=False)
-    appointment_status = db.Column(db.String(15), default='pending')  # Add appointment status field
+    appointment_status = db.Column(db.String(15), default='booked')  # Add appointment status field
     patient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     def __repr__(self):
@@ -182,6 +182,8 @@ def home():
 
 from datetime import datetime
 
+from datetime import datetime
+
 @app.route('/book_appointment', methods=['GET', 'POST'])
 @login_required
 def book_appointment():
@@ -189,37 +191,53 @@ def book_appointment():
         user = User.query.get(current_user.id)
         appointments = user.patient
 
-        if appointments and request.method == 'POST':
+        # Check if the Profile table is filled (i.e., user has appointments)
+        if not appointments:
+            return redirect(url_for('profile'))
+
+        if request.method == 'POST':
             appointment_id = request.form.get('appointment_id')
             selected_appointment = Profile.query.get(appointment_id)
 
-            # Check if the selected appointment status is 'approved'
-            if selected_appointment.appointment_status == 'approved':
-                # Update the date_registered field with the current date and time
-                selected_appointment.date_registered = datetime.utcnow()
+            if selected_appointment:
+                # Check if the selected appointment status is 'approved'
+                if selected_appointment.appointment_status == 'approved':
+                    # Update the date_registered field with the current date and time
+                    selected_appointment.date_registered = datetime.utcnow()
 
-                # Update the status to 'booked'
-                selected_appointment.appointment_status = 'booked'
+                    # Update the status to 'booked'
+                    selected_appointment.appointment_status = 'booked'
 
-                try:
-                    db.session.commit()
-                    flash('Appointment booked successfully!', category='success')
-                except:
-                    flash('There was a problem booking the appointment', category='error')
+                    try:
+                        db.session.commit()
+                        flash('Appointment booked successfully!', category='success')
+                    except:
+                        flash('There was a problem booking the appointment', category='error')
+                else:
+                    flash('Appointment can only be booked if it is approved', category='error')
+            else:
+                flash('Invalid appointment ID', category='error')
 
-        return render_template('home.html', appointments=appointments)
+        return render_template('book_appointment.html', appointments=appointments)
     return redirect(url_for('login'))
+
+
+
 
 
 @app.route('/delete/<int:id>')
 def delete(id):
+    print("Received id:", id)
     appointment_to_delete = Profile.query.get_or_404(id)
+    print("Appointment to delete:", appointment_to_delete)
+
     try:
         db.session.delete(appointment_to_delete)
         db.session.commit()
         return redirect('/')
     except:
-        flash('There was a problem deleting a task',category='error')
+        flash('There was a problem deleting the appointment', category='error')
+
     
 @app.route('/logout')
 @login_required
@@ -227,7 +245,7 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route('/signup',methods=['POST','GET'])
+@app.route('/signup', methods=['POST', 'GET'])
 def signup():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -235,25 +253,37 @@ def signup():
         school_id = request.form.get('school_id')
         password = request.form.get('password')
         role = request.form.get('role')
+
         user = User.query.filter_by(email=email).first()
         s_id = User.query.filter_by(school_id=school_id).first()
+
+        # Check if the school_id contains special letters for patients
+        patient_special_letters = ['lmr', 'nrb', 'mks']
+        is_patient = any(special_letter in school_id for special_letter in patient_special_letters)
+
         if user:
             flash('Account with this email already exists!', category='error')
         if s_id:
             flash('Account with this Username already exists!', category='error')
         if not school_id or not email or not password:
             flash('Sorry we couldn\'t sign you in!', category='error')
-        new_user = User(email=email,
-                        username=username,
-                        school_id=school_id,
-                        password=generate_password_hash(password,method = 'sha256'),
-                        role=role)
-        db.session.add(new_user)
-        db.session.commit()
-        login_user(new_user,remember=True)
-        return redirect(url_for('login'))
-        
-    return render_template("signup.html",user=current_user)
+        elif role.lower() not in ['patient', 'doctor']:
+            flash('Invalid role!', category='error')
+        elif role.lower() == 'patient' and not is_patient:
+            flash('Invalid school ID for patients!', category='error')
+        else:
+            new_user = User(email=email,
+                            username=username,
+                            school_id=school_id,
+                            password=generate_password_hash(password, method='sha256'),
+                            role=role)
+            db.session.add(new_user)
+            db.session.commit()
+            login_user(new_user, remember=True)
+            return redirect(url_for('login'))
+
+    return render_template("signup.html", user=current_user)
+
 
 @app.route('/admin')
 @login_required
@@ -289,7 +319,7 @@ def takeup(id):
         appointment = Profile.query.get_or_404(id)
 
         # Check if the appointment is already approved
-        if appointment.appointment_status == 'pending':
+        if appointment.appointment_status == 'booked':
             # Update the appointment status to approved (or something similar)
             appointment.appointment_status = 'approved'
             

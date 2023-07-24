@@ -37,8 +37,8 @@
                 <td>{{ appointment.patient.email }}</td>
                 <td>{{ appointment.blood_type }}</td>
                 <td>
-                  {% if appointment.appointment_status == 'pending' %}
-                  <a href="{{ url_for('takeup', id=appointment.id) }}" class="btn btn-danger">Pending</a>
+                  {% if appointment.appointment_status == 'booked' %}
+                  <a href="{{ url_for('takeup', id=appointment.id) }}" class="btn btn-danger">Booked</a>
                   {% elif appointment.appointment_status == 'approved' %}
                   <a href="#" class="btn btn-success">Approved</a>
                   {% endif %}
