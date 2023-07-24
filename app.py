@@ -190,9 +190,9 @@ def book_appointment():
     if current_user.role == 'patient':
         user = User.query.get(current_user.id)
         appointments = user.patient
-
         # Check if the Profile table is filled (i.e., user has appointments)
         if not appointments:
+            flash('Complete this section first. By completing it you will have booked your first apointment.', category='error')
             return redirect(url_for('profile'))
 
         if request.method == 'POST':
@@ -210,15 +210,16 @@ def book_appointment():
 
                     try:
                         db.session.commit()
-                        flash('Appointment booked successfully!', category='success')
+                        flash('Appointment booked successfully! Thank you for setting up your profile too.', category='success')
                     except:
                         flash('There was a problem booking the appointment', category='error')
                 else:
-                    flash('Appointment can only be booked if it is approved', category='error')
+                    flash('You can\'t make another appointment until it has been approverd by the doctor on the other side. Be patient :)', category='error')
             else:
                 flash('Invalid appointment ID', category='error')
 
-        return render_template('book_appointment.html', appointments=appointments)
+        return render_template('book_appointment.html',
+                               appointments=appointments)
     return redirect(url_for('login'))
 
 
